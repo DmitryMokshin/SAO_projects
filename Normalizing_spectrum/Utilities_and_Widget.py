@@ -5,21 +5,41 @@ import numpy as np
 from astropy.utils.data import get_pkg_data_filename
 from astropy.io import fits
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-global list_coef, line, canvas, ax
+global list_coef, window_graphics
 
 
 def update_plotting():
     list_coefficient = list_coef.get()
     t = np.arange(-10.0, 10.0, .01)
-    ax.set_ylim(min(list_coefficient[0] + list_coefficient[1] * t + list_coefficient[2] * t ** 2.0 + list_coefficient[
-                    3] * t ** 3.0),
-                max(list_coefficient[0] + list_coefficient[1] * t + list_coefficient[2] * t ** 2.0 + list_coefficient[
-                    3] * t ** 3.0))
-    line.set_data(t, list_coefficient[0] + list_coefficient[1] * t + list_coefficient[2] * t ** 2.0 + list_coefficient[
-        3] * t ** 3.0)
-    canvas.draw()
+    window_graphics.line.set_data(t, list_coefficient[0] + list_coefficient[1] * t + list_coefficient[2] * t ** 2.0 +
+                                  list_coefficient[
+                                      3] * t ** 3.0)
+    window_graphics.canvas.draw()
+
+
+class Plotting_Window(tk.Frame):
+    """Класс создания окна, где строится график загружаемого спектра"""
+
+    def __init__(self, parent):
+        tk.Frame.__init__(self, parent)
+
+        self.fig = Figure(figsize=(8, 4), dpi=200)
+        self.ax = self.fig.add_subplot(111)
+
+        self.line, = self.ax.plot(0, 0, color='white')
+
+        self.ax.set_xlabel(r'$\lambda$, Å', fontsize=10)
+
+        self.canvas = FigureCanvasTkAgg(self.fig, self)
+        self.canvas.draw()
+
+        self.toolbar = NavigationToolbar2Tk(self.canvas, self, pack_toolbar=False)
+        self.toolbar.update()
+
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH)
+        self.toolbar.pack(side=tk.BOTTOM, fill=tk.BOTH)
 
 
 class Setting_Parameter(tk.Frame):
@@ -33,7 +53,13 @@ class Setting_Parameter(tk.Frame):
 
         self.update_plot = command
 
-        self.lbl_value = tk.Label(self, text=str(init_value))
+        self.value = tk.StringVar()
+
+        self.value.set(str(init_value))
+        self.value.trace("w", lambda name, index, mode: update_plotting())
+
+        self.ent_value = tk.Entry(self, textvariable=self.value)
+
         self.lbl_step = tk.Label(self, text=str(self.list_step[self.i_step]))
 
         self.btn_decrease_value = tk.Button(self, text='-', command=self.decrease_value)
@@ -46,17 +72,23 @@ class Setting_Parameter(tk.Frame):
         self.btn_increase_step.grid(row=1, column=2, sticky="nsew")
         self.btn_decrease_step.grid(row=1, column=0, sticky="nsew")
 
-        self.lbl_value.grid(row=0, column=1)
+        self.ent_value.grid(row=0, column=1)
         self.lbl_step.grid(row=1, column=1)
 
     def increase_value(self):
-        value = float(self.lbl_value["text"])
-        self.lbl_value["text"] = f"{round(value + self.list_step[self.i_step], 4)}"
+        if self.value.get() == '':
+            value = 0
+        else:
+            value = float(self.value.get())
+        self.value.set(str(round(value + self.list_step[self.i_step], 4)))
         self.update_plot()
 
     def decrease_value(self):
-        value = float(self.lbl_value["text"])
-        self.lbl_value["text"] = f"{round(value - self.list_step[self.i_step], 4)}"
+        if self.value.get() == '':
+            value = 0
+        else:
+            value = float(self.value.get())
+        self.value.set(str(round(value - self.list_step[self.i_step], 4)))
         self.update_plot()
 
     def increase_step(self):
@@ -72,7 +104,7 @@ class Setting_Parameter(tk.Frame):
         self.lbl_step["text"] = f"{round(self.list_step[self.i_step], 4)}"
 
     def get(self):
-        return float(self.lbl_value["text"])
+        return float(self.value.get())
 
 
 class Setting_Parameters(tk.Frame):
@@ -108,28 +140,32 @@ class Setting_Parameters(tk.Frame):
 
 
 def main():
-    global list_coef, line, canvas, ax
+    global list_coef, window_graphics
 
     root = tk.Tk()
 
+    window_grap = tk.Frame(root)
     window_param = tk.Frame(root)
 
-    fig = Figure(figsize=(5, 4), dpi=100)
-    t = np.arange(-10.0, 10.0, .01)
-    ax = fig.add_subplot()
-    line, = ax.plot(t, 1.0 + t + t ** 2 + t ** 3)
-    ax.set_ylim(min(1.0 + t + t ** 2 + t ** 3), max(1.0 + t + t ** 2 + t ** 3))
-    ax.set_xlabel("time [s]")
-    ax.set_ylabel("f(t)")
-
-    canvas = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
-    canvas.draw()
-
+    window_graphics = Plotting_Window(window_grap)
     list_coef = Setting_Parameters(window_param, [1.0, 1.0, 1.0, 1.0], ['c_1', 'c_2', 'c_3', 'c_4'], update_plotting)
 
-    window_param.grid(row=0, column=0)
-    canvas.get_tk_widget().grid(row=0, column=0)
+    t = np.arange(-10.0, 10.0, .01)
+    x = 1.0 + t + t ** 2 + t ** 3
+
+    window_graphics.line.set_data(t, x)
+    window_graphics.line.set_color('black')
+    window_graphics.ax.set_xlim(min(t), max(t))
+    window_graphics.ax.set_ylim(min(x), max(x))
+
+    window_graphics.canvas.draw()
+
+    window_graphics.pack()
     list_coef.pack()
+
+    window_grap.grid(column=1, row=0)
+    window_param.grid(column=0, row=0)
+
     root.mainloop()
 
 
